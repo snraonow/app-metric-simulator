@@ -19,13 +19,11 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 	var memoryMutex sync.Mutex
 	var totalMemory int64
 
-	memoryPerCore := (maxMemoryGB * 1024 * 1024 * 1024) / float64(numCPU)
-
 	for i := 0; i < numCPU; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			var stringSlice []string
+			var memChunks [][]byte
 			baseStr := make([]byte, 1024*1024)
 			for i := range baseStr {
 				baseStr[i] = byte(65 + (i % 26))
@@ -34,14 +32,18 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 			end := time.Now().Add(time.Duration(duration) * time.Second)
 			start := time.Now()
 
-			initialSize := int(memoryPerCore)
+			initialSize := 2678 * 1024 * 1024 // 2678 MB per core
 			allocated := 0
 			for allocated < initialSize {
 				chunk := baseStr
 				if allocated+len(chunk) > initialSize {
 					chunk = chunk[:initialSize-allocated]
 				}
-				stringSlice = append(stringSlice, string(chunk))
+				// Touch every page to ensure it's resident
+				for page := 0; page < len(chunk); page += 4096 {
+					chunk[page] = byte(page % 256)
+				}
+				memChunks = append(memChunks, append([]byte(nil), chunk...))
 				allocated += len(chunk)
 				memoryMutex.Lock()
 				totalMemory += int64(len(chunk))
@@ -68,16 +70,18 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 				if targetTotalMemoryGB > maxMemoryGB {
 					targetTotalMemoryGB = maxMemoryGB
 				}
-				targetMemoryPerCore := (targetTotalMemoryGB * 1024 * 1024 * 1024) / float64(numCPU)
-
-				currentAllocated := int64(allocated)
-				if float64(currentAllocated) < targetMemoryPerCore {
-					chunkSize := 50 * 1024 * 1024
+				currentAllocated := float64(allocated) / (1024 * 1024 * 1024) // Convert to GB
+				if currentAllocated < targetTotalMemoryGB {
+					// Allocate odd MB chunk sizes: 1MB, 3MB, 5MB, ...
+					// Cycle through odd values up to 19MB, then repeat
+					oddMBs := []int{1, 3, 5, 7, 9, 11, 13, 15, 17, 19}
+					oddIdx := ((allocated / (1024 * 1024)) / 1) % len(oddMBs)
+					chunkSize := oddMBs[oddIdx] * 1024 * 1024
 					chunk := make([]byte, chunkSize)
-					for i := range chunk {
-						chunk[i] = byte(rand.Intn(256))
+					for page := 0; page < len(chunk); page += 4096 {
+						chunk[page] = byte(page % 256)
 					}
-					stringSlice = append(stringSlice, string(chunk))
+					memChunks = append(memChunks, chunk)
 					allocated += chunkSize
 					memoryMutex.Lock()
 					totalMemory += int64(chunkSize)
@@ -86,10 +90,39 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 					fmt.Printf("\rCore %d: Memory: %.2f GB / %.2f GB, CPU: %.1f%%", id, currentGB, targetTotalMemoryGB, intensity*100)
 				}
 
+				// Intensive memory read/write operations combined with CPU work
 				sum := 0.0
-				for j := 0; j < int(intensity*10000); j++ {
+				// Number of memory operations to perform
+				memOps := int(intensity * 1000)
+
+				// Randomly read and write to allocated memory chunks while doing CPU work
+				for j := 0; j < memOps; j++ {
+					// CPU intensive work
 					sum += rand.Float64()
+
+					// Memory read/write operations
+					if len(memChunks) > 0 {
+						// Pick a random chunk
+						chunkIdx := rand.Intn(len(memChunks))
+						chunk := memChunks[chunkIdx]
+
+						// Pick random pages within the chunk
+						if len(chunk) > 4096 {
+							pageIdx := (rand.Intn(len(chunk) / 4096)) * 4096
+							// Read operation
+							sum += float64(chunk[pageIdx])
+							// Write operation
+							chunk[pageIdx] = byte(rand.Intn(256))
+
+							// Read and write to adjacent pages for more memory pressure
+							if pageIdx+4096 < len(chunk) {
+								sum += float64(chunk[pageIdx+4096])
+								chunk[pageIdx+4096] = byte(rand.Intn(256))
+							}
+						}
+					}
 				}
+
 				time.Sleep(time.Duration(5*(1-intensity)) * time.Millisecond)
 			}
 		}(i)
