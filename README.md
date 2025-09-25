@@ -12,3 +12,4 @@ To run the simulator for high memory and CPU usage with constant frequency for 1
 - `--high`: Resources to stress (memory, cpu, or both, comma separated)
 - `--frequency`: Load frequency (`constant` or `random`)
 - `--time`: Duration in seconds
+ 
