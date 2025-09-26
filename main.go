@@ -20,6 +20,7 @@ func main() {
 	freqFlag := flag.String("frequency", "constant", "Load frequency: constant or random")
 	maxCPUFlag := flag.Int("max-cpu", 60, "Maximum CPU usage percent (default 60)")
 	maxMemoryFlag := flag.Float64("max-memory", 10.0, "Maximum memory usage in GB (default 10GB)")
+	crashTimeFlag := flag.Int("crash-time", 0, "Time in seconds after which to simulate a crash (0 means no crash)")
 
 	flag.CommandLine.Parse(os.Args[2:])
 
@@ -28,11 +29,21 @@ func main() {
 	frequency := *freqFlag
 	maxCPU := *maxCPUFlag
 	maxMemoryGB := *maxMemoryFlag
+	crashTime := *crashTimeFlag
 
 	rand.Seed(time.Now().UnixNano())
+	// Check if I/O simulation is requested
+	simulateIO := false
+	for _, r := range resources {
+		if strings.ToLower(strings.TrimSpace(r)) == "io" {
+			simulateIO = true
+			break
+		}
+	}
+
 	fmt.Printf("Simulating high %v for %d seconds with %s frequency...\n", resources, duration, frequency)
 
-	// Run the combined CPU and memory simulation
-	simulateWithLimits(duration, frequency, maxCPU, maxMemoryGB)
+	// Run the simulation with all requested features
+	simulateWithLimits(duration, frequency, maxCPU, maxMemoryGB, crashTime, simulateIO)
 	fmt.Println("\nSimulation complete.")
 }

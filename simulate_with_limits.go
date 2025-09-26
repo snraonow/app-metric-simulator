@@ -3,15 +3,81 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"time"
 )
 
-func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB float64) {
+// simulateIO performs intensive I/O operations
+func simulateIOOperations(tempDir string) error {
+	// Create a temporary file
+	f, err := os.CreateTemp(tempDir, "io-test-*.dat")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	// Create a large buffer (1MB) for I/O operations
+	buffer := make([]byte, 1024*1024)
+	for i := range buffer {
+		buffer[i] = byte(rand.Intn(256))
+	}
+
+	// Write data in chunks
+	for i := 0; i < 100; i++ {
+		if _, err := f.Write(buffer); err != nil {
+			return fmt.Errorf("write error: %v", err)
+		}
+		// Force sync to disk
+		if err := f.Sync(); err != nil {
+			return fmt.Errorf("sync error: %v", err)
+		}
+	}
+
+	// Read back the data to generate read I/O
+	if _, err := f.Seek(0, 0); err != nil {
+		return fmt.Errorf("seek error: %v", err)
+	}
+
+	readBuffer := make([]byte, 1024*1024)
+	for {
+		_, err := f.Read(readBuffer)
+		if err != nil {
+			break
+		}
+	}
+
+	return nil
+}
+
+func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB float64, crashTime int, simulateIO bool) {
 	numCPU := runtime.NumCPU() / 2
 	if numCPU < 1 {
 		numCPU = 1
+	}
+
+	// Create temporary directory for I/O operations
+	if simulateIO {
+		tempDir, err := os.MkdirTemp("", "io-simulation")
+		if err != nil {
+			fmt.Printf("Failed to create temp directory: %v\n", err)
+			return
+		}
+		defer os.RemoveAll(tempDir)
+	}
+
+	// Set up crash timer if crashTime is specified
+	if crashTime > 0 {
+		go func() {
+			fmt.Printf("\nCrash simulation will trigger in %d seconds...\n", crashTime)
+			time.Sleep(time.Duration(crashTime) * time.Second)
+			fmt.Printf("\nTriggering crash simulation...\n")
+
+			// Trigger an immediate panic with a stack trace
+			panic("Simulated application crash triggered after " + fmt.Sprintf("%d", crashTime) + " seconds")
+		}()
 	}
 	fmt.Printf("Starting simulation using %d cores (50%% of available cores)...\n", numCPU)
 
@@ -50,6 +116,19 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 				currentGB := float64(totalMemory) / (1024 * 1024 * 1024)
 				memoryMutex.Unlock()
 				fmt.Printf("\rCore %d: Initial Memory: %.2f GB", id, currentGB)
+			}
+
+			// Start I/O simulation in a separate goroutine if enabled
+			if simulateIO {
+				go func() {
+					for time.Now().Before(end) {
+						if err := simulateIOOperations(tempDir); err != nil {
+							fmt.Printf("\nI/O simulation error: %v\n", err)
+						}
+						// Brief pause between I/O operations
+						time.Sleep(time.Millisecond * 100)
+					}
+				}()
 			}
 
 			for time.Now().Before(end) {
