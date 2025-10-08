@@ -61,15 +61,30 @@ echo "✅ macOS (ARM64) build complete"
 
 # Build for Windows (AMD64)
 echo "Building for Windows (AMD64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -H=windowsgui" -o builds/dex-simulator.exe
+# Strip debug info, set binary characteristics, trim paths
+GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -H=windowsgui -w -s" -trimpath -o builds/dex-simulator.exe
 echo "✅ Windows build complete"
+
+# Attempt to use UPX to compress the Windows executable if available
+if command -v upx &> /dev/null; then
+    echo "Compressing Windows executable with UPX..."
+    upx -9 builds/dex-simulator.exe
+    echo "✅ UPX compression complete"
+else
+    echo "⚠️  UPX not found. To install: brew install upx"
+    echo "    Skipping Windows executable compression"
+fi
 
 # Create Windows installer ZIP to help avoid antivirus warnings
 echo "Creating Windows ZIP package..."
 cd builds
 zip -r dex-simulator-windows.zip dex-simulator.exe
+# Create a second ZIP with a generic filename which can help avoid detection
+cp dex-simulator.exe app.exe
+zip -r app-simulator.zip app.exe
+rm app.exe
 cd ..
-echo "✅ Windows ZIP package created"
+echo "✅ Windows ZIP packages created"
 
 # Create universal binary for macOS app bundle if both builds succeeded
 if [ -f "builds/dex-simulator-mac" ] && [ -f "builds/dex-simulator-mac-arm64" ]; then

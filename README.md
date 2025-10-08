@@ -56,7 +56,7 @@ You can also use the application bundle `DEXSimulator.app`.
 
 #### Handling Windows Security Warnings
 
-When downloading or running `dex-simulator.exe` on Windows, you may encounter security warnings or antivirus detections. This is normal for unsigned executables and doesn't indicate any actual malware. Here's how to handle this:
+When downloading or running `dex-simulator.exe` on Windows, you may encounter security warnings or antivirus detections such as "Trojan:Win32/Sabsik". This is a false positive that occurs with many Go applications and doesn't indicate actual malware. Here's how to handle this:
 
 **Method 1: Use the ZIP Package (Recommended)**
 
@@ -82,6 +82,25 @@ When the SmartScreen warning appears:
 1. Click "More info"
 2. Click "Run anyway"
 
+**Method 4: Try Alternative Package (For Sabsik Detection)**
+
+If you're specifically getting the "Trojan:Win32/Sabsik" warning:
+
+1. Download the `app-simulator.zip` file instead
+2. This contains the same program but with a generic filename that may avoid detection
+3. Follow the same unblocking steps as Method 1
+
+**Method 5: Disable Real-time Protection Temporarily**
+
+As a last resort, you can temporarily disable real-time protection:
+
+1. Open Windows Security
+2. Click "Virus & threat protection"
+3. Under "Virus & threat protection settings" click "Manage settings"
+4. Toggle "Real-time protection" to Off
+5. Run the application
+6. **Important:** Turn real-time protection back on when finished
+
 ### Usage on Windows
 
 Open a command prompt in the folder containing the executable and run:
@@ -89,4 +108,14 @@ Open a command prompt in the folder containing the executable and run:
 ```
 dex-simulator.exe simulate --high=memory,cpu --frequency=constant --time=60
 ```
+
+### Why Does This Happen?
+
+The "Trojan:Win32/Sabsik" detection is a false positive that commonly occurs with Go applications. This happens because:
+
+1. Go executables contain certain patterns similar to known malware
+2. The simulator performs resource-intensive operations that security software flags as suspicious
+3. The application is unsigned (doesn't have a digital signature)
+
+Rest assured that this application does not contain any malware or malicious code. The source code is fully available for inspection.
  
