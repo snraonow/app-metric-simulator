@@ -52,7 +52,7 @@ func simulateIOOperations(tempDir string) error {
 	return nil
 }
 
-func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB float64, crashTime int, simulateIO bool) {
+func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB float64, crashTime int, simulateIO bool, batchSizeMinutes, batchWindowMinutes, simDurationMinutes int) {
 	numCPU := runtime.NumCPU() / 2
 	if numCPU < 1 {
 		numCPU = 1
@@ -98,6 +98,29 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 			end := time.Now().Add(time.Duration(duration) * time.Second)
 			start := time.Now()
 
+			// Set default values if not specified
+			if batchSizeMinutes <= 0 {
+				batchSizeMinutes = 5 // default first batch duration: 5 minutes
+			}
+			if batchWindowMinutes <= 0 {
+				batchWindowMinutes = 20 // default batch window: 20 minutes
+			}
+			if simDurationMinutes <= 0 {
+				simDurationMinutes = batchSizeMinutes // default simulation duration: 5 minutes
+			}
+
+			// Time windows
+			firstBatchDuration := time.Duration(batchSizeMinutes) * time.Minute
+			batchWindow := time.Duration(batchWindowMinutes) * time.Minute
+			simDuration := time.Duration(simDurationMinutes) * time.Minute
+
+			// Validate parameters
+			if simDuration > batchWindow {
+				fmt.Printf("\nWarning: Simulation duration (%d min) is larger than batch window (%d min). Adjusting simulation duration.\n",
+					simDurationMinutes, batchWindowMinutes)
+				simDuration = batchWindow
+			}
+
 			initialSize := 2678 * 1024 * 1024 // 2678 MB per core
 			allocated := 0
 			for allocated < initialSize {
@@ -120,6 +143,14 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 
 			// Start I/O simulation in a separate goroutine if enabled
 			if simulateIO {
+				// Create temporary directory for I/O operations
+				tempDir, err := os.MkdirTemp("", "simulator-io")
+				if err != nil {
+					fmt.Printf("\nError creating temp directory: %v\n", err)
+					return
+				}
+				defer os.RemoveAll(tempDir)
+
 				go func() {
 					for time.Now().Before(end) {
 						if err := simulateIOOperations(tempDir); err != nil {
@@ -133,24 +164,74 @@ func simulateWithLimits(duration int, frequency string, maxCPU int, maxMemoryGB 
 
 			for time.Now().Before(end) {
 				elapsed := time.Since(start)
-				durationSecs := float64(duration)
-				elapsedSecs := elapsed.Seconds()
 
-				// Calculate intensity (60% to 90%), but cap at maxCPU
-				intensity := 0.6 + 0.3*(elapsedSecs/durationSecs)
+				// Determine if we're in an active simulation window
+				isSimulationActive := false
+
+				if elapsed < firstBatchDuration {
+					// First 5 minutes: always active
+					isSimulationActive = true
+				} else {
+					// Calculate which 20-minute window we're in
+					windowNumber := int(elapsed.Minutes() / batchWindow.Minutes())
+					windowStart := start.Add(time.Duration(windowNumber) * batchWindow)
+
+					// Generate a random 5-minute slot within this window
+					// Use windowNumber as seed for consistent behavior within the same window
+					r := rand.New(rand.NewSource(int64(windowNumber)))
+					randomOffset := time.Duration(r.Intn(int(batchWindow.Minutes()-simDuration.Minutes()))) * time.Minute
+					simStart := windowStart.Add(randomOffset)
+					simEnd := simStart.Add(simDuration)
+
+					// Check if current time falls within the simulation period
+					now := time.Now()
+					isSimulationActive = now.After(simStart) && now.Before(simEnd)
+				}
+
+				// Calculate base intensity
+				var intensity float64
+				if isSimulationActive {
+					// High intensity during active simulation (60% to 90%)
+					intensity = 0.6 + 0.3*(elapsed.Seconds()/float64(duration))
+				} else {
+					// Reduced load during inactive periods (0% to 10%)
+					intensity = 0.1 * (elapsed.Seconds() / float64(duration))
+				}
+
+				// Cap at maxCPU
 				maxIntensity := float64(maxCPU) / 100.0
 				if intensity > maxIntensity {
 					intensity = maxIntensity
 				}
 
-				// Calculate target memory for this point in time, but cap at maxMemoryGB
-				progressRatio := elapsedSecs / durationSecs
-				targetTotalMemoryGB := 1.0 + (maxMemoryGB-1.0)*progressRatio
+				// Calculate target memory based on simulation state
+				progressRatio := elapsed.Seconds() / float64(duration)
+				var targetTotalMemoryGB float64
+				if isSimulationActive {
+					// High memory usage during active simulation (50% to 100% of maxMemoryGB)
+					targetTotalMemoryGB = (maxMemoryGB * 0.5) + (maxMemoryGB * 0.5 * progressRatio)
+				} else {
+					// Reduced memory usage during inactive periods (10% to 30% of maxMemoryGB)
+					targetTotalMemoryGB = (maxMemoryGB * 0.1) + (maxMemoryGB * 0.2 * progressRatio)
+				}
 				if targetTotalMemoryGB > maxMemoryGB {
 					targetTotalMemoryGB = maxMemoryGB
 				}
+
 				currentAllocated := float64(allocated) / (1024 * 1024 * 1024) // Convert to GB
-				if currentAllocated < targetTotalMemoryGB {
+
+				// Adjust memory if needed (both up and down)
+				if currentAllocated > targetTotalMemoryGB*1.1 { // Allow 10% buffer before reducing
+					// Release some memory by removing chunks
+					numChunksToRemove := int((currentAllocated - targetTotalMemoryGB) * float64(len(memChunks)) / currentAllocated)
+					if numChunksToRemove > 0 && len(memChunks) > numChunksToRemove {
+						memChunks = memChunks[numChunksToRemove:]
+						allocated = 0
+						for _, chunk := range memChunks {
+							allocated += len(chunk)
+						}
+					}
+				} else if currentAllocated < targetTotalMemoryGB {
 					// Allocate odd MB chunk sizes: 1MB, 3MB, 5MB, ...
 					// Cycle through odd values up to 19MB, then repeat
 					oddMBs := []int{1, 3, 5, 7, 9, 11, 13, 15, 17, 19}

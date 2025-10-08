@@ -3,27 +3,40 @@
 # Create a builds directory if it doesn't exist
 mkdir -p builds
 
-# Set up temporary directory for icon conversion
-TEMP_ICONSET="./icon.iconset"
-mkdir -p "$TEMP_ICONSET"
+# Check if ImageMagick is installed
+if ! command -v convert &> /dev/null; then
+    echo "⚠️  ImageMagick not found. Icon conversion will be skipped."
+    echo "To install ImageMagick: brew install imagemagick"
+else
+    # Set up temporary directory for icon conversion
+    TEMP_ICONSET="./icon.iconset"
+    mkdir -p "$TEMP_ICONSET"
 
-# Convert ICO to PNG files at different sizes
-convert img/logo.ico -resize 16x16 "$TEMP_ICONSET/icon_16x16.png"
-convert img/logo.ico -resize 32x32 "$TEMP_ICONSET/icon_16x16@2x.png"
-convert img/logo.ico -resize 32x32 "$TEMP_ICONSET/icon_32x32.png"
-convert img/logo.ico -resize 64x64 "$TEMP_ICONSET/icon_32x32@2x.png"
-convert img/logo.ico -resize 128x128 "$TEMP_ICONSET/icon_128x128.png"
-convert img/logo.ico -resize 256x256 "$TEMP_ICONSET/icon_128x128@2x.png"
-convert img/logo.ico -resize 256x256 "$TEMP_ICONSET/icon_256x256.png"
-convert img/logo.ico -resize 512x512 "$TEMP_ICONSET/icon_256x256@2x.png"
-convert img/logo.ico -resize 512x512 "$TEMP_ICONSET/icon_512x512.png"
-convert img/logo.ico -resize 1024x1024 "$TEMP_ICONSET/icon_512x512@2x.png"
+    # Check if the source icon exists
+    if [ -f "img/logo.ico" ]; then
+        echo "Converting icon..."
+        # Convert ICO to PNG files at different sizes
+        convert img/logo.ico -resize 16x16 "$TEMP_ICONSET/icon_16x16.png"
+        convert img/logo.ico -resize 32x32 "$TEMP_ICONSET/icon_16x16@2x.png"
+        convert img/logo.ico -resize 32x32 "$TEMP_ICONSET/icon_32x32.png"
+        convert img/logo.ico -resize 64x64 "$TEMP_ICONSET/icon_32x32@2x.png"
+        convert img/logo.ico -resize 128x128 "$TEMP_ICONSET/icon_128x128.png"
+        convert img/logo.ico -resize 256x256 "$TEMP_ICONSET/icon_128x128@2x.png"
+        convert img/logo.ico -resize 256x256 "$TEMP_ICONSET/icon_256x256.png"
+        convert img/logo.ico -resize 512x512 "$TEMP_ICONSET/icon_256x256@2x.png"
+        convert img/logo.ico -resize 512x512 "$TEMP_ICONSET/icon_512x512.png"
+        convert img/logo.ico -resize 1024x1024 "$TEMP_ICONSET/icon_512x512@2x.png"
 
-# Convert iconset to ICNS
-iconutil -c icns "$TEMP_ICONSET"
+        # Convert iconset to ICNS
+        iconutil -c icns "$TEMP_ICONSET"
+        echo "✅ Icon conversion complete"
+    else
+        echo "⚠️  Icon file 'img/logo.ico' not found. Icon conversion will be skipped."
+    fi
 
-# Clean up temporary directory
-rm -rf "$TEMP_ICONSET"
+    # Clean up temporary directory
+    rm -rf "$TEMP_ICONSET"
+fi
 
 # Create macOS app bundle directory structure
 mkdir -p builds/DEXSimulator.app/Contents/MacOS
@@ -33,21 +46,39 @@ mkdir -p builds/DEXSimulator.app/Contents/Resources
 cp Info.plist builds/DEXSimulator.app/Contents/
 cp icon.icns builds/DEXSimulator.app/Contents/Resources/
 
-# Build for macOS (amd64)
-echo "Building for macOS (amd64)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/DEXSimulator.app/Contents/MacOS/dex-simulator
-cp builds/DEXSimulator.app/Contents/MacOS/dex-simulator builds/dex-simulator-mac
-echo "✅ macOS (amd64) build complete"
+# Build for macOS (Intel/AMD64)
+echo "Building for macOS (Intel/AMD64)..."
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator-mac
+echo "✅ macOS (Intel/AMD64) build complete"
 
-# Build for macOS (arm64 - M1/M2)
-echo "Building for macOS (arm64)..."
+# Create a copy for the app bundle
+cp builds/dex-simulator-mac builds/DEXSimulator.app/Contents/MacOS/dex-simulator
+
+# Build for macOS (ARM64 - M1/M2)
+echo "Building for macOS (ARM64)..."
 GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator-mac-arm64
-echo "✅ macOS (arm64) build complete"
+echo "✅ macOS (ARM64) build complete"
 
-# Build for Windows (amd64)
-echo "Building for Windows (amd64)..."
+# Build for Windows (AMD64)
+echo "Building for Windows (AMD64)..."
 GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator.exe
 echo "✅ Windows build complete"
+
+# Create universal binary for macOS app bundle if both builds succeeded
+if [ -f "builds/dex-simulator-mac" ] && [ -f "builds/dex-simulator-mac-arm64" ]; then
+    echo "Creating universal binary for app bundle..."
+    lipo -create -output builds/DEXSimulator.app/Contents/MacOS/dex-simulator-universal builds/dex-simulator-mac builds/dex-simulator-mac-arm64
+    mv builds/DEXSimulator.app/Contents/MacOS/dex-simulator-universal builds/DEXSimulator.app/Contents/MacOS/dex-simulator
+    echo "✅ Universal binary created"
+else
+    echo "⚠️  Skipping universal binary creation - one or more builds failed"
+    # Copy at least one version if available
+    if [ -f "builds/dex-simulator-mac" ]; then
+        cp builds/dex-simulator-mac builds/DEXSimulator.app/Contents/MacOS/dex-simulator
+    elif [ -f "builds/dex-simulator-mac-arm64" ]; then
+        cp builds/dex-simulator-mac-arm64 builds/DEXSimulator.app/Contents/MacOS/dex-simulator
+    fi
+fi
 
 echo "\nAll builds completed! The binaries are in the 'builds' directory:"
 echo "- builds/dex-simulator-mac     (macOS Intel)"
