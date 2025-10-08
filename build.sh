@@ -48,7 +48,7 @@ cp icon.icns builds/DEXSimulator.app/Contents/Resources/
 
 # Build for macOS (Intel/AMD64)
 echo "Building for macOS (Intel/AMD64)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator-mac
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2'" -o builds/dex-simulator-mac
 echo "✅ macOS (Intel/AMD64) build complete"
 
 # Create a copy for the app bundle
@@ -56,12 +56,12 @@ cp builds/dex-simulator-mac builds/DEXSimulator.app/Contents/MacOS/dex-simulator
 
 # Build for macOS (ARM64 - M1/M2)
 echo "Building for macOS (ARM64)..."
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator-mac-arm64
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'main.Version=1.0.2'" -o builds/dex-simulator-mac-arm64
 echo "✅ macOS (ARM64) build complete"
 
 # Build for Windows (AMD64)
 echo "Building for Windows (AMD64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0' -H=windowsgui" -o builds/dex-simulator.exe
+GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -H=windowsgui" -o builds/dex-simulator.exe
 echo "✅ Windows build complete"
 
 # Create Windows installer ZIP to help avoid antivirus warnings
