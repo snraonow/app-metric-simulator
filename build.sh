@@ -59,16 +59,21 @@ echo "Building for macOS (ARM64)..."
 GOOS=darwin GOARCH=arm64 go build -ldflags "-X 'main.Version=1.0.2'" -o builds/dex-simulator-mac-arm64
 echo "✅ macOS (ARM64) build complete"
 
-# Build for Windows (AMD64)
-echo "Building for Windows (AMD64)..."
-# Strip debug info, set binary characteristics, trim paths
-GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -H=windowsgui -w -s" -trimpath -o builds/dex-simulator.exe
-echo "✅ Windows build complete"
+# Build for Windows (AMD64) - Console version (for command line use)
+echo "Building Windows Console version (AMD64)..."
+GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -w -s" -trimpath -o builds/dex-simulator-console.exe
+echo "✅ Windows Console build complete"
 
-# Attempt to use UPX to compress the Windows executable if available
+# Build for Windows (AMD64) - GUI version (for double-click use)
+echo "Building Windows GUI version (AMD64)..."
+GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.2' -H=windowsgui -w -s" -trimpath -o builds/dex-simulator.exe
+echo "✅ Windows GUI build complete"
+
+# Attempt to use UPX to compress the Windows executables if available
 if command -v upx &> /dev/null; then
-    echo "Compressing Windows executable with UPX..."
+    echo "Compressing Windows executables with UPX..."
     upx -9 builds/dex-simulator.exe
+    upx -9 builds/dex-simulator-console.exe
     echo "✅ UPX compression complete"
 else
     echo "⚠️  UPX not found. To install: brew install upx"
@@ -76,13 +81,20 @@ else
 fi
 
 # Create Windows installer ZIP to help avoid antivirus warnings
-echo "Creating Windows ZIP package..."
+echo "Creating Windows ZIP packages..."
 cd builds
-zip -r dex-simulator-windows.zip dex-simulator.exe
-# Create a second ZIP with a generic filename which can help avoid detection
-cp dex-simulator.exe app.exe
-zip -r app-simulator.zip app.exe
-rm app.exe
+# Create complete package with both versions
+zip -r dex-simulator-windows-complete.zip dex-simulator.exe dex-simulator-console.exe
+# Create separate packages for GUI and Console versions
+zip -r dex-simulator-windows-gui.zip dex-simulator.exe
+zip -r dex-simulator-windows-console.zip dex-simulator-console.exe
+# Create packages with generic filenames to help avoid detection
+cp dex-simulator.exe app-gui.exe
+cp dex-simulator-console.exe app-console.exe
+zip -r app-simulator-complete.zip app-gui.exe app-console.exe
+zip -r app-simulator-gui.zip app-gui.exe
+zip -r app-simulator-console.zip app-console.exe
+rm app-gui.exe app-console.exe
 cd ..
 echo "✅ Windows ZIP packages created"
 
@@ -103,6 +115,12 @@ else
 fi
 
 echo "\nAll builds completed! The binaries are in the 'builds' directory:"
-echo "- builds/dex-simulator-mac     (macOS Intel)"
-echo "- builds/dex-simulator-mac-arm64 (macOS Apple Silicon)"
-echo "- builds/dex-simulator.exe     (Windows)"
+echo "- builds/dex-simulator-mac         (macOS Intel)"
+echo "- builds/dex-simulator-mac-arm64   (macOS Apple Silicon)"
+echo "- builds/dex-simulator.exe         (Windows GUI version)"
+echo "- builds/dex-simulator-console.exe (Windows Console version)"
+echo "\nWindows ZIP packages created:"
+echo "- builds/dex-simulator-windows-complete.zip  (Both GUI and Console versions)"
+echo "- builds/dex-simulator-windows-gui.zip      (GUI version only)"
+echo "- builds/dex-simulator-windows-console.zip  (Console version only)"
+echo "- builds/app-simulator-*.zip                (Generic filename versions)"

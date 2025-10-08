@@ -86,8 +86,11 @@ When the SmartScreen warning appears:
 
 If you're specifically getting the "Trojan:Win32/Sabsik" warning:
 
-1. Download the `app-simulator.zip` file instead
-2. This contains the same program but with a generic filename that may avoid detection
+1. Download one of the alternative ZIP files:
+   - `app-simulator-console.zip` - For command line usage
+   - `app-simulator-gui.zip` - For double-clicking
+   - `app-simulator-complete.zip` - Contains both versions
+2. These contain the same program but with generic filenames that may help avoid detection
 3. Follow the same unblocking steps as Method 1
 
 **Method 5: Disable Real-time Protection Temporarily**
@@ -103,11 +106,23 @@ As a last resort, you can temporarily disable real-time protection:
 
 ### Usage on Windows
 
-Open a command prompt in the folder containing the executable and run:
+#### Console Version (Command Line)
+
+For command line usage, use the console version which will keep the command prompt window open:
+
+```
+dex-simulator-console.exe simulate --high=memory,cpu --frequency=constant --time=60
+```
+
+#### GUI Version (Double-Click)
+
+The GUI version is designed to be double-clicked or run from shortcuts. It will not show a command prompt window, but it still accepts command line arguments when launched from a shortcut:
 
 ```
 dex-simulator.exe simulate --high=memory,cpu --frequency=constant --time=60
 ```
+
+> **Note**: The GUI version will exit immediately if run directly from a command prompt. Always use the console version for command line operations.
 
 ### Why Does This Happen?
 
