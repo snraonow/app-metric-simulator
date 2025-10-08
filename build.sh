@@ -61,8 +61,15 @@ echo "✅ macOS (ARM64) build complete"
 
 # Build for Windows (AMD64)
 echo "Building for Windows (AMD64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0'" -o builds/dex-simulator.exe
+GOOS=windows GOARCH=amd64 go build -ldflags "-X 'main.Version=1.0.0' -H=windowsgui" -o builds/dex-simulator.exe
 echo "✅ Windows build complete"
+
+# Create Windows installer ZIP to help avoid antivirus warnings
+echo "Creating Windows ZIP package..."
+cd builds
+zip -r dex-simulator-windows.zip dex-simulator.exe
+cd ..
+echo "✅ Windows ZIP package created"
 
 # Create universal binary for macOS app bundle if both builds succeeded
 if [ -f "builds/dex-simulator-mac" ] && [ -f "builds/dex-simulator-mac-arm64" ]; then
